@@ -292,6 +292,7 @@ return {
 	['About'] = '關於',
 	['Author'] = '作者',
 	['Update time'] = '更新時間',
+	['Action'] = '操作',
 	['Use'] = '使用',
 	['Fetch repo meta list failed.'] = '獲取倉庫列表失敗。',
 	['Decode %s failed!'] = '解碼%s失敗！',
@@ -299,4 +300,10 @@ return {
 	['Failed.'] = '失敗。',
 	['Only team marker can do this.'] = '僅團隊標記者可進行該操作。',
 	['About to clear all current world marks and set %d new world marks, continue?'] = '即將清空當前所有世界標記，並設置新的%d個世界標記，是否繼續？',
+	['All maps'] = '所有地圖',
+	['Favorite list'] = '收藏列表',
+	['Filter favorites'] = '過濾收藏',
+	['Add to favorites'] = '添加到收藏',
+	['Remove from favorites'] = '從收藏中移除',
+	['Added to favorites.'] = '已添加到收藏。',
 }

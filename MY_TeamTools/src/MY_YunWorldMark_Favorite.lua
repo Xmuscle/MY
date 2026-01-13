@@ -1,14 +1,14 @@
 --------------------------------------------------------------------------------
 -- This file is part of the JX3 Mingyi Plugin.
 -- @link     : https://jx3.zhaiyiming.com/
--- @desc     : 云世界标记 - 数据订阅
+-- @desc     : 云世界标记 - 收藏列表
 -- @author   : 茗伊 @双梦镇 @追风蹑影
 -- @modifier : Emil Zhai (root@zhaiyiming.com)
 -- @copyright: Emil Zhai <root@zhaiyiming.com>
 --------------------------------------------------------------------------------
 local X = MY
 --------------------------------------------------------------------------------
-local MODULE_PATH = 'MY_TeamTools/MY_YunWorldMark_Subscribe'
+local MODULE_PATH = 'MY_TeamTools/MY_YunWorldMark_Favorite'
 local PLUGIN_NAME = 'MY_TeamTools'
 local PLUGIN_ROOT = X.PACKET_INFO.ROOT .. PLUGIN_NAME
 local MODULE_NAME = 'MY_YunWorldMark'
@@ -27,196 +27,97 @@ local USE_DISABLE_MS = 1000
 local USE_COLOR_ACTIVE = { 255, 255, 0 }
 local USE_COLOR_DISABLED = { 128, 128, 128 }
 
-function D.ShowSceneWorldMark()
-	local tTemplateToIndex = {}
-	for _, info in ipairs((X.CONSTANT and X.CONSTANT.WORLD_MARK) or {}) do
-		if info and info.dwNpcTemplateID and info.nIndex then
-			tTemplateToIndex[info.dwNpcTemplateID] = info.nIndex
-		end
-	end
+--------------------------------------------------------------------------------
+-- 收藏数据管理
+--------------------------------------------------------------------------------
 
-	local data = {}
-	for i = 1, 10 do
-		data[i] = { x = 0, y = 0, z = 0, mark = i }
-	end
-
-	for _, npc in ipairs(X.GetNearNpc()) do
-		local nIndex = npc and tTemplateToIndex[npc.dwTemplateID]
-		if nIndex and nIndex >= 1 and nIndex <= 10 then
-			local nX = tonumber(npc.nX) or 0
-			local nY = tonumber(npc.nY) or 0
-			local nZ = tonumber(npc.nZ) or 0
-			if not (nX == 0 and nY == 0 and nZ == 0) then
-				data[nIndex] = { x = nX, y = nY, z = nZ, mark = nIndex }
-			end
-		end
-	end
-
-	-- 手动拼接可读的 JSON（同时保证能被 X.DecodeJSON 解析）
-	-- 约束：第一层列表项使用 \t + 换行；对象内部不再使用 \t。
-	local aText = { '[', }
-	for i = 1, 10 do
-		local pt = data[i] or {}
-		local nX = tostring(tonumber(pt.x) or 0)
-		local nY = tostring(tonumber(pt.y) or 0)
-		local nZ = tostring(tonumber(pt.z) or 0)
-		local nMark = tostring(tonumber(pt.mark) or i)
-		local szLine = string.format('\t{ "x": %s, "y": %s, "z": %s, "mark": %s }', nX, nY, nZ, nMark)
-		if i < 10 then
-			szLine = szLine .. ','
-		end
-		table.insert(aText, szLine)
-	end
-	table.insert(aText, ']')
-	local szText = table.concat(aText, '\n')
-	X.UI.OpenTextEditor(szText, {
-		w = 450,
-		h = 300,
-		title = _L['World mark'],
-	})
+function D.Load()
+	return X.LoadLUAData({'userdata/yun_world_mark/favorite.jx3dat', X.PATH_TYPE.GLOBAL}) or {}
 end
 
-function D.Search(page, nPage)
+function D.Save(aFavorite)
+	X.SaveLUAData({'userdata/yun_world_mark/favorite.jx3dat', X.PATH_TYPE.GLOBAL}, aFavorite)
+	FireUIEvent('MY_YUN_WORLD_MARK__FAVORITE__LIST_UPDATE')
+end
+
+function D.Add(info, dwMapID)
+	if not info or not info.key then
+		return
+	end
+	-- 如果没有传入地图ID，尝试获取当前地图
+	if not dwMapID then
+		local me = X.GetClientPlayer()
+		if me then
+			dwMapID = me.GetMapID() or 0
+		end
+	end
+	local aFavorite = D.Load()
+	-- 移除已存在的相同 key
+	for i, p in X.ipairs_r(aFavorite) do
+		if p.key == info.key then
+			table.remove(aFavorite, i)
+		end
+	end
+	-- 保存地图信息
+	local rec = X.Clone(info)
+	rec.dwMapID = dwMapID or 0
+	table.insert(aFavorite, rec)
+	D.Save(aFavorite)
+	X.OutputAnnounceMessage(_L['Added to favorites.'])
+end
+
+function D.Remove(info)
+	if not info or not info.key then
+		return
+	end
+	X.Confirm(_L['Confirm?'], function()
+		local aFavorite = D.Load()
+		for i, p in X.ipairs_r(aFavorite) do
+			if p.key == info.key then
+				table.remove(aFavorite, i)
+			end
+		end
+		D.Save(aFavorite)
+	end)
+end
+
+function D.IsFavorited(info)
+	if not info or not info.key then
+		return false
+	end
+	for _, p in ipairs(D.Load()) do
+		if p.key == info.key then
+			return true
+		end
+	end
+	return false
+end
+
+--------------------------------------------------------------------------------
+-- 界面逻辑
+--------------------------------------------------------------------------------
+
+function D.Search(page)
 	if not page or not page:IsValid() then
 		return
 	end
 	local ui = X.UI(page)
-
-	-- 防止并发搜索回调覆盖新结果
-	D.nSearchToken = (tonumber(D.nSearchToken) or 0) + 1
-	local nToken = D.nSearchToken
-
-	nPage = tonumber(nPage) or 1
-	if nPage < 1 then
-		nPage = 1
-	end
-
-	local szSearch = X.TrimString(ui:Fetch('WndEditBox_Search'):Text() or '')
+	local szSearch = X.TrimString(ui:Fetch('WndEditBox_Search'):Text() or ''):lower()
 	local dwMapID = D.dwMapID or 0
 
-	local aAllList = nil
-	local tFeedRecord = nil
-	local nPending = 0
-	local function fnToRecord(tInfo)
-		if not X.IsTable(tInfo) then
-			return nil
+	local aFavorite = D.Load()
+	local aDataSource = {}
+	for _, rec in ipairs(aFavorite) do
+		local bMatchMap = (dwMapID == 0) or (rec.dwMapID == dwMapID)
+		local bMatchSearch = X.IsEmpty(szSearch)
+			or (rec.szName and rec.szName:lower():find(szSearch, 1, true))
+			or (rec.szAuthor and rec.szAuthor:lower():find(szSearch, 1, true))
+			or (rec.key and rec.key:lower():find(szSearch, 1, true))
+		if bMatchMap and bMatchSearch then
+			table.insert(aDataSource, rec)
 		end
-		return {
-			id = tInfo.id,
-			key = tInfo.key,
-			szName = tInfo.name,
-			szAuthor = tInfo.author,
-			dwUpdateTime = tInfo.update,
-			szDataURL = tInfo.data_url,
-			szAboutURL = tInfo.about,
-			tRaw = tInfo,
-		}
 	end
-	local function fnFinalize()
-		if nToken ~= D.nSearchToken then
-			return
-		end
-		if nPending > 0 then
-			return
-		end
-
-		local aDataSource = {}
-		local nFeedID = nil
-		if X.IsTable(tFeedRecord) and tFeedRecord.id then
-			nFeedID = tFeedRecord.id
-			table.insert(aDataSource, tFeedRecord)
-		end
-		for _, rec in ipairs(aAllList or {}) do
-			if not (nFeedID and rec and rec.id == nFeedID) then
-				table.insert(aDataSource, rec)
-			end
-		end
-		ui:Fetch('WndTable_List'):DataSource(aDataSource)
-	end
-	local function fnDoneOne()
-		nPending = nPending - 1
-		fnFinalize()
-	end
-
-	-- 1) 排行榜列表
-	nPending = nPending + 1
-	X.Ajax({
-		url = MY_RSS.PULL_BASE_URL .. '/api/addon/common-monitor/subscribe/all',
-		data = {
-			l = X.ENVIRONMENT.GAME_LANG,
-			L = X.ENVIRONMENT.GAME_EDITION,
-			T = 3,
-			map = dwMapID,
-			q = szSearch,
-			page = nPage,
-			pageSize = 100,
-		},
-		success = function(szHTML)
-			if nToken ~= D.nSearchToken then
-				return
-			end
-			local res = X.DecodeJSON(szHTML)
-			if not X.IsTable(res) or not X.IsTable(res.data) then
-				X.OutputAnnounceMessage(_L['Fetch repo meta list failed.'])
-				aAllList = {}
-				fnDoneOne()
-				return
-			end
-			local a = {}
-			for _, info in ipairs(res.data) do
-				table.insert(a, fnToRecord(info))
-			end
-			aAllList = a
-			fnDoneOne()
-		end,
-		error = function(html, status)
-			if nToken ~= D.nSearchToken then
-				return
-			end
-			--[[#DEBUG BEGIN]]
-			X.OutputDebugMessage(_L[MODULE_NAME], 'ERROR Fetch list: ' .. X.EncodeLUAData(status) .. '\n' .. (X.ConvertToANSI(html) or ''), X.DEBUG_LEVEL.WARNING)
-			--[[#DEBUG END]]
-			X.OutputAnnounceMessage(_L['Fetch repo meta list failed.'])
-			aAllList = {}
-			fnDoneOne()
-		end,
-	})
-
-	-- 2) 精准匹配（不在排行榜也能查）
-	if not X.IsEmpty(szSearch) then
-		nPending = nPending + 1
-		X.Ajax({
-			url = MY_RSS.PULL_BASE_URL .. '/api/addon/common-monitor/subscribe/feed',
-			data = {
-				l = X.ENVIRONMENT.GAME_LANG,
-				L = X.ENVIRONMENT.GAME_EDITION,
-				T = 3,
-				key = szSearch,
-			},
-			success = function(szHTML)
-				if nToken ~= D.nSearchToken then
-					return
-				end
-				local res = X.DecodeJSON(szHTML)
-				-- 不存在：{"code":404,"msg":"数据不存在"}
-				if X.IsTable(res) and res.id then
-					tFeedRecord = fnToRecord(res)
-				else
-					tFeedRecord = nil
-				end
-				fnDoneOne()
-			end,
-			error = function(szHtml, szStatus)
-				if nToken ~= D.nSearchToken then
-					return
-				end
-				tFeedRecord = nil
-				fnDoneOne()
-			end,
-		})
-	end
-
-	fnFinalize()
+	ui:Fetch('WndTable_List'):DataSource(aDataSource)
 end
 
 function D.OnInitPage()
@@ -231,6 +132,15 @@ function D.OnInitPage()
 	end
 
 	local tMapName, aMapName, tMapMenu = {}, {}, {}
+	table.insert(tMapMenu, {
+		szOption = _L['All maps'],
+		fnAction = function()
+			D.dwMapID = 0
+			ui:Fetch('WndAutocomplete_Map'):Text('')
+			X.UI.ClosePopupMenu()
+			D.Search(page)
+		end,
+	})
 	for _, group in ipairs(X.GetTypeGroupMap()) do
 		local tSub = { szOption = group.szGroup }
 		for _, info in ipairs(group.aMapInfo) do
@@ -238,7 +148,9 @@ function D.OnInitPage()
 				szOption = info.szName,
 				fnAction = function()
 					D.dwMapID = info.dwID
+					ui:Fetch('WndAutocomplete_Map'):Text(info.szName)
 					X.UI.ClosePopupMenu()
+					D.Search(page)
 				end,
 			})
 			tMapName[info.dwID] = info.szName
@@ -247,11 +159,6 @@ function D.OnInitPage()
 		table.insert(tMapMenu, tSub)
 	end
 	local szCurrentMapName = tMapName[D.dwMapID] or ''
-
-	local dwTargetType, dwTargetID = 0, 0
-	if me then
-		dwTargetType, dwTargetID = X.GetCharacterTarget(me)
-	end
 
 	local nX, nY = 20, 10
 	local COMPONENT_H = 25
@@ -280,8 +187,7 @@ function D.OnInitPage()
 		y = nY,
 		w = 500,
 		h = COMPONENT_H,
-		text = dwTargetType == TARGET.NPC and X.GetNpcName(dwTargetID) or '',
-		placeholder = _L['Search'],
+		placeholder = _L['Filter favorites'],
 		onSpecialKeyDown = function(_, szKey)
 			if szKey == 'Enter' then
 				D.Search(page)
@@ -290,7 +196,7 @@ function D.OnInitPage()
 		end,
 	}):Width() + 5
 
-	nX = nX + ui:Append('WndButton', {
+	ui:Append('WndButton', {
 		name = 'Btn_Search',
 		x = nX,
 		y = nY,
@@ -300,7 +206,7 @@ function D.OnInitPage()
 		onClick = function()
 			D.Search(page)
 		end,
-	}):Width() + 5
+	})
 
 	ui:Append('WndTable', {
 		name = 'WndTable_List',
@@ -333,13 +239,9 @@ function D.OnInitPage()
 			end
 			local t = {
 				{
-					szOption = MY_YunWorldMark_Favorite.IsFavorited(rec) and _L['Remove from favorites'] or _L['Add to favorites'],
+					szOption = _L['Remove from favorites'],
 					fnAction = function()
-						if MY_YunWorldMark_Favorite.IsFavorited(rec) then
-							MY_YunWorldMark_Favorite.Remove(rec)
-						else
-							MY_YunWorldMark_Favorite.Add(rec, D.dwMapID)
-						end
+						D.Remove(rec)
 					end,
 				},
 			}
@@ -368,7 +270,7 @@ function D.OnInitPage()
 			},
 			{
 				key = 'dwUpdateTime',
-				title = _L['Update time'],
+				title = _L('Update time'),
 				alignHorizontal = 'center',
 				width = 150,
 				render = function(value)
@@ -388,11 +290,15 @@ function D.OnInitPage()
 		dataSource = {},
 	})
 
-	D.Search(page, 1)
+	local frame = this:GetRoot()
+	frame:RegisterEvent('MY_YUN_WORLD_MARK__FAVORITE__LIST_UPDATE')
+
+	D.Search(page)
 	D.OnResizePage()
 end
 
 function D.OnActivePage()
+	D.Search(this)
 end
 
 function D.OnResizePage()
@@ -414,6 +320,12 @@ function D.OnResizePage()
 	ui:Fetch('Btn_Search'):Pos(nPadding + nMapW + nGap + nSearchW + nGap, 10)
 	-- 列表动态宽高
 	ui:Fetch('WndTable_List'):Size(nW - 40, nH - 70)
+end
+
+function D.OnEvent(event)
+	if event == 'MY_YUN_WORLD_MARK__FAVORITE__LIST_UPDATE' then
+		D.Search(this)
+	end
 end
 
 function D.OnItemLButtonClick()
@@ -458,37 +370,11 @@ function D.OnItemLButtonClick()
 end
 
 --------------------------------------------------------------------------------
--- 目标头像菜单：副本内 NPC 右键快捷搜索
---------------------------------------------------------------------------------
-do
-local function GetNpcTargetMenu()
-	if not X.IsInDungeonMap() then
-		return
-	end
-	local me = X.GetClientPlayer()
-	if not me then
-		return
-	end
-	local dwType = X.GetCharacterTarget(me)
-	if dwType ~= TARGET.NPC then
-		return
-	end
-	return {
-		szOption = _L['Search MY cloud world mark'],
-		fnAction = function()
-			MY_YunWorldMark.OpenPanel()
-		end,
-	}
-end
-X.RegisterTargetAddonMenu('MY_YunWorldMark', GetNpcTargetMenu)
-end
-
---------------------------------------------------------------------------------
 -- 模块导出
 --------------------------------------------------------------------------------
 do
 local settings = {
-	name = 'MY_YunWorldMark_Subscribe',
+	name = 'MY_YunWorldMark_Favorite',
 	exports = {
 		{
 			preset = 'UIEvent',
@@ -496,13 +382,14 @@ local settings = {
 				'OnInitPage',
 				'OnActivePage',
 				'OnResizePage',
+				'OnEvent',
 				'OnItemLButtonClick',
 			},
 			root = D,
 		},
 	},
 }
-MY_YunWorldMark.RegisterModule('Subscribe', _L['Data subscribe'], X.CreateModule(settings))
+MY_YunWorldMark.RegisterModule('Favorite', _L['Favorite list'], X.CreateModule(settings))
 end
 
 --------------------------------------------------------------------------------
@@ -510,19 +397,22 @@ end
 --------------------------------------------------------------------------------
 do
 local settings = {
-	name = 'MY_YunWorldMark_Subscribe',
+	name = 'MY_YunWorldMark_Favorite',
 	exports = {
 		{
 			root = D,
 			fields = {
-				'Search',
-				'ShowSceneWorldMark',
+				'Load',
+				'Save',
+				'Add',
+				'Remove',
+				'IsFavorited',
 			},
 			preset = 'UIEvent',
 		},
 	},
 }
-MY_YunWorldMark_Subscribe = X.CreateModule(settings)
+MY_YunWorldMark_Favorite = X.CreateModule(settings)
 end
 
 --[[#DEBUG BEGIN]]X.ReportModuleLoading(MODULE_PATH, 'FINISH')--[[#DEBUG END]]
