@@ -1036,7 +1036,9 @@ local settings = {
 			preset = 'UIEvent',
 			fields = {
 				'OnInitPage',
+				'OnActivePage',
 				'OnResizePage',
+				'OnDeactivePage',
 				szSaveDB = 'MY_RoleStatistics_EquipStat.bSaveDB',
 				szFloatEntry = 'MY_RoleStatistics_EquipStat.bFloatEntry',
 			},

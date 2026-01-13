@@ -542,6 +542,7 @@ local settings = {
 				'OnInitPage',
 				'OnActivePage',
 				'OnResizePage',
+				'OnDeactivePage',
 				'OnItemLButtonClick',
 			},
 			root = D,

@@ -589,6 +589,7 @@ local settings = {
 				'OnInitPage',
 				'OnActivePage',
 				'OnResizePage',
+				'OnDeactivePage',
 				'OnEvent',
 				'OnItemLButtonClick',
 			},

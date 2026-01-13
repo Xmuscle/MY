@@ -916,6 +916,8 @@ local settings = {
 			preset = 'UIEvent',
 			fields = {
 				'OnInitPage',
+				'OnActivePage',
+				'OnResizePage',
 				'OnDeactivePage',
 				bStatRange = true,
 			},
