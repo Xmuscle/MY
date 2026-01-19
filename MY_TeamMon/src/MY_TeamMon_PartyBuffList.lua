@@ -232,8 +232,8 @@ function D.GetPlayer(dwID)
 	if dwID == X.GetClientPlayerID() then
 		player = X.GetClientPlayer()
 		info = {
-			dwMountKungfuID = UI_GetPlayerMountKungfuID(),
-			dwActualMountKungfuID = UI_GetPlayerMountKungfuID(),
+			dwKungfuID = UI_GetPlayerMountKungfuID(),
+			dwActualKungfuID = UI_GetPlayerMountKungfuID(),
 			szName = player.szName,
 		}
 	else
