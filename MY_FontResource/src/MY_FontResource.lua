@@ -25,6 +25,7 @@ local FONT_LIST = X.LoadLUAData(FONT_DIR .. '{$lang}.jx3dat') or {}
 
 function D.GetList()
 	local aList, tExist, szLang = {}, {}, X.ENVIRONMENT.GAME_LANG
+	-- 内置字体
 	for _, p in ipairs(Font.GetFontPathList() or {}) do
 		local szFile = p.szFile:gsub('/', '\\')
 		local szKey = szFile:lower()
@@ -33,6 +34,7 @@ function D.GetList()
 			tExist[szKey] = true
 		end
 	end
+	-- 描述文件字体
 	for _, p in ipairs(FONT_LIST) do
 		if p.tLang[szLang] then
 			local szFile = p.szFile:gsub('^%./', FONT_DIR):gsub('/', '\\')
@@ -43,6 +45,19 @@ function D.GetList()
 			end
 		end
 	end
+	-- 直接从font文件夹读取字体文件
+	for _, szFileName in ipairs(CPath.GetFileList(FONT_DIR) or {}) do
+		if szFileName:lower():match('%.ttf$') or szFileName:lower():match('%.otf$') then
+			local szFile = (FONT_DIR .. szFileName):gsub('/', '\\')
+			local szKey = szFile:lower()
+			if not tExist[szKey] then
+				local szName = szFileName:gsub('%.[^.]+$', '') -- 去掉扩展名作为显示名称
+				table.insert(aList, { szName = szName, szFile = szFile })
+				tExist[szKey] = true
+			end
+		end
+	end
+	-- 存在性检查
 	for i, p in X.ipairs_r(aList) do
 		if not IsFileExist(p.szFile) then
 			table.remove(aList, i)
