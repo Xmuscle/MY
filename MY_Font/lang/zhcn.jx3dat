@@ -18,5 +18,6 @@ return {
 	['4. Place the prepared font files in the font directory to use them, click button below to open font folder.'] = '4. 将准备好的字体文件放置在字体目录下即可使用，点击下方按钮打开字体文件夹。',
 
 	['Open font folder'] = '打开字体文件夹',
+	['Refresh font list'] = '刷新字体列表',
 	['Get more fonts'] = '获取更多字体',
 }

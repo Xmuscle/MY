@@ -266,6 +266,14 @@ function PS.OnPanelActive(wnd)
 
 	ui:Append('WndButton', {
 		x = nX + 160, y = nY, w = 150, h = 30,
+		text = _L['Refresh font list'],
+		onClick = function()
+			X.Panel.SwitchTab('MY_Font', true)
+		end,
+	})
+
+	ui:Append('WndButton', {
+		x = nX + 320, y = nY, w = 150, h = 30,
 		text = _L['Get more fonts'],
 		onClick = function()
 			X.OpenBrowser('https://j3cx.com/fonts/' .. X.ENVIRONMENT.GAME_LOCALE, 'outer')
