@@ -1,0 +1,186 @@
+name: Auto Tag
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  auto-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Find release commit in push range
+        id: find_release
+        shell: bash
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            RANGE="$AFTER"
+          else
+            RANGE="$BEFORE..$AFTER"
+          fi
+
+          echo "Scanning commits in range: $RANGE"
+
+          MATCH_COMMIT=""
+          MATCH_VERSION=""
+
+          # 遍历范围内的所有 commit（包括 merge commit 带入的 parent commits）
+          while IFS='|' read -r hash msg; do
+            # 优先匹配直接的 release commit: "release: X.X.X"
+            if [[ "$msg" =~ ^release:\s*([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?) ]]; then
+              MATCH_COMMIT="$hash"
+              MATCH_VERSION="${BASH_REMATCH[1]}"
+              echo "Found direct release commit: $hash ($msg)"
+              break
+            fi
+          done < <(git log --format='%H|%s' "$RANGE")
+
+          # 如果没找到直接的 release commit，检查是否有 merge commit 合并了 release 分支
+          if [ -z "$MATCH_COMMIT" ]; then
+            while IFS='|' read -r hash msg; do
+              if [[ "$msg" =~ Merge.*release/v([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?) ]]; then
+                VERSION="${BASH_REMATCH[1]}"
+                echo "Found merge commit for release/v$VERSION: $hash"
+                # 查找 merge commit 的第二个 parent（被合并的分支）中的 release commit
+                MERGE_PARENT=$(git log --format='%H' -1 "$hash^2" 2>/dev/null || true)
+                if [ -n "$MERGE_PARENT" ]; then
+                  # 在被合并的分支中查找真正的 release commit
+                  RELEASE_COMMIT=$(git log --format='%H|%s' "$MERGE_PARENT" -20 | grep -E '^\w+\|release:\s*'"$VERSION" | head -1 | cut -d'|' -f1)
+                  if [ -n "$RELEASE_COMMIT" ]; then
+                    MATCH_COMMIT="$RELEASE_COMMIT"
+                    MATCH_VERSION="$VERSION"
+                    echo "Found actual release commit in merged branch: $RELEASE_COMMIT"
+                    break
+                  fi
+                fi
+              fi
+            done < <(git log --format='%H|%s' "$RANGE")
+          fi
+
+          if [ -z "$MATCH_COMMIT" ]; then
+            echo "No release commit found in push range."
+            echo "matched=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Final release commit: $MATCH_COMMIT (version $MATCH_VERSION)"
+          echo "matched=true" >> $GITHUB_OUTPUT
+          echo "commit=$MATCH_COMMIT" >> $GITHUB_OUTPUT
+          echo "version=$MATCH_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check existing tag on commit
+        if: steps.find_release.outputs.matched == 'true'
+        id: check_tag
+        shell: bash
+        run: |
+          COMMIT="${{ steps.find_release.outputs.commit }}"
+          VERSION="${{ steps.find_release.outputs.version }}"
+          TAG_NAME="v$VERSION"
+
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists. Skipping."
+            echo "should_tag=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          TAGS_ON_COMMIT=$(git tag --points-at "$COMMIT")
+          if [ -n "$TAGS_ON_COMMIT" ]; then
+            echo "Commit already has tags: $TAGS_ON_COMMIT"
+            echo "should_tag=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "should_tag=true" >> $GITHUB_OUTPUT
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Detect project info
+        if: steps.check_tag.outputs.should_tag == 'true'
+        id: project_info
+        run: |
+          # 从文件系统检测项目命名空间（英文）
+          BASE_DIR=$(ls -d *_\!Base 2>/dev/null | head -1)
+          if [ -z "$BASE_DIR" ]; then
+            echo "::error::未找到 *_!Base 目录"
+            exit 1
+          fi
+          PROJECT_NS="${BASE_DIR%_\!Base}"
+          echo "? 检测到项目命名空间: $PROJECT_NS"
+
+          # 从 package.ini 读取项目名称（中文）
+          if [ -f "package.ini" ]; then
+            # package.ini 是 GBK 编码，转换为 UTF-8 后提取 name
+            PROJECT_NAME=$(iconv -f GBK -t UTF-8 package.ini 2>/dev/null | grep -E "^name=" | sed 's/name=//' | sed 's/插件集$//' || true)
+            echo "? 检测到项目名称: $PROJECT_NAME"
+          fi
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$PROJECT_NS"
+            echo "?? 未找到 package.ini，使用命名空间作为项目名称"
+          fi
+
+          echo "namespace=$PROJECT_NS" >> $GITHUB_OUTPUT
+          echo "name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog for version
+        if: steps.check_tag.outputs.should_tag == 'true'
+        id: extract_changelog
+        shell: bash
+        run: |
+          VERSION="${{ steps.find_release.outputs.version }}"
+          PROJECT_NAME="${{ steps.project_info.outputs.name }}"
+
+          echo "Extracting changelog for ${PROJECT_NAME}插件集 v${VERSION}"
+
+          # 从 CHANGELOG.md 提取对应版本的更新日志
+          # 匹配 ## XXX插件集 vX.X.X 到下一个 ## XXX插件集 vX.X.X 之间的内容
+          CHANGELOG_CONTENT=$(awk -v ver="$VERSION" -v name="$PROJECT_NAME" '
+            BEGIN { found=0; content="" }
+            /^## / {
+              if (found) exit
+              if ($0 ~ name"插件集 v"ver) { found=1; next }
+            }
+            found && /^[*]/ { content = content $0 "\n" }
+            END { print content }
+          ' CHANGELOG.md)
+
+          if [ -z "$CHANGELOG_CONTENT" ]; then
+            echo "Warning: No changelog content found for version $VERSION"
+            CHANGELOG_CONTENT=""
+          fi
+
+          # 保存到临时文件以避免 shell 转义问题
+          printf '%s\n' "Release v${VERSION}" > /tmp/tag_message.txt
+          printf '%s' "$CHANGELOG_CONTENT" >> /tmp/tag_message.txt
+
+          echo "Tag message content:"
+          cat /tmp/tag_message.txt
+
+      - name: Create and push tag
+        if: steps.check_tag.outputs.should_tag == 'true'
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.PAT_TOKEN }}" ]; then
+            echo "Missing PAT_TOKEN secret. Cannot push tag to trigger workflows."
+            exit 1
+          fi
+
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          COMMIT="${{ steps.find_release.outputs.commit }}"
+          TAG_NAME="${{ steps.check_tag.outputs.tag }}"
+
+          # 使用文件内容作为 tag message，包含完整的 changelog
+          git tag -a "$TAG_NAME" "$COMMIT" -F /tmp/tag_message.txt
+
+          git push origin "$TAG_NAME"
