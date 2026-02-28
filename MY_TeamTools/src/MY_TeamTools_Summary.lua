@@ -229,10 +229,11 @@ function D.UpdateList(page)
 
 	for k, v in ipairs(aTeam) do
 		-- 心法统计
-		tKungfu[v.dwKungfuID] = tKungfu[v.dwKungfuID] or {}
-		table.insert(tKungfu[v.dwKungfuID], v)
+		local dwHDKungfuID = GetHDKungfuID(v.dwKungfuID)
+		tKungfu[dwHDKungfuID] = tKungfu[dwHDKungfuID] or {}
+		table.insert(tKungfu[dwHDKungfuID], v)
 		D.CountScore(v, tScore)
-		if not RT_SELECT_KUNGFU or (RT_SELECT_KUNGFU and v.dwKungfuID == RT_SELECT_KUNGFU) then
+		if not RT_SELECT_KUNGFU or (RT_SELECT_KUNGFU and dwHDKungfuID == RT_SELECT_KUNGFU) then
 			local szName = 'P' .. (v.szGlobalID or v.dwID)
 			local h = page.hPlayerList:Lookup(szName)
 			if not h then
