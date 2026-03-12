@@ -1273,6 +1273,7 @@ function CTM:ReloadParty()
 	self:RefreshDistance()
 	self:RefreshFormation()
 	self:RefreshPlayerSkillCD()
+	self:UpdateGroupRide()
 	CTM_LIFE_CACHE = {}
 end
 
@@ -2380,6 +2381,15 @@ function CTM:UpdateMemberGroupRide(hMember)
     elseif hGroup then
         hGroup:Hide()
     end
+
+    local fScale = (CFG.fScaleY + CFG.fScaleX) / 2
+    if fScale == 0 then
+        fScale = 1
+    end
+    hImgGroupDriver:SetSize(20 * fScale, 22 * fScale)
+    hImgGroupOtherDriver:SetSize(20 * fScale, 22 * fScale)
+    hImgGroupPassenger:SetSize(16 * fScale, 22 * fScale)
+    hImgGroupOtherPassenger:SetSize(16 * fScale, 22 * fScale)
 end
 
 function CTM:UpdateGroupRide()

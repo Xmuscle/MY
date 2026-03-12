@@ -1101,6 +1101,7 @@ function D.OnFrameBreathe()
 	MY_CataclysmParty:RefreshBossFocus()
 	MY_CataclysmParty:RefreshSputtering()
 	MY_CataclysmParty:RefreshPlayerSkillCD()
+	MY_CataclysmParty:UpdateGroupRide()
 	-- kill System Panel
 	D.RaidPanel_Switch(DEBUG)
 	D.TeammatePanel_Switch(false)
