@@ -1335,6 +1335,7 @@ function CTM:DrawParty(nIndex)
 	self:RefreshTarget(dwID, dwType, dwID, dwType)
 	self:RefreshTTarget()
 	self:RefreshPlayerSkillCD()
+	self:UpdateGroupRide()
 end
 
 function CTM:Scale(fX, fY, frame)
@@ -2351,7 +2352,7 @@ function CTM:UpdateMemberGroupRide(hMember)
     end
 
     local dwPlayerID              = hMember.dwID
-    local hPlayer                 = GetPlayer(dwPlayerID)
+    local hPlayer                 = X.GetPlayer(dwPlayerID)
     local hGroup                  = hMember:Lookup("Handle_Group")
     local hImgInvincible          = hGroup:Lookup("Image_Invincible")
     local hImgGroupDriver         = hGroup:Lookup("Image_GroupDriver")
@@ -2370,7 +2371,7 @@ function CTM:UpdateMemberGroupRide(hMember)
             end
 
             hGroup:Show()
-            hImgInvincible:Show(tTargetState.bDriver or tTargetState.bPassenger)
+            hImgInvincible:Show(tTargetState.bPassenger)
             hImgGroupDriver:Show(tTargetState.bDriver and bSameVehicle)
             hImgGroupOtherDriver:Show(tTargetState.bDriver and not bSameVehicle)
             hImgGroupPassenger:Show(tTargetState.bPassenger and bSameVehicle)
