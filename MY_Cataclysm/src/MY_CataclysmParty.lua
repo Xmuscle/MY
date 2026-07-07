@@ -529,6 +529,13 @@ function MY_CataclysmParty_Base.OnItemRButtonClick()
 				table.insert(menu, v)
 			end
 		end
+		if MY_CharInfo and MY_CharInfo.ViewCharInfoToPlayer then
+			table.insert(menu, {
+				szOption = g_tStrings.STR_LOOK .. g_tStrings.STR_EQUIP_ATTR, bDisable = not info.bOnline, fnAction = function()
+					MY_CharInfo.ViewCharInfoToPlayer(dwID)
+				end
+			})
+		end
 		local extra = {}
 		if MY_Focus then
 			for _, v in ipairs(MY_Focus.GetTargetMenu(TARGET.PLAYER, dwID)) do
