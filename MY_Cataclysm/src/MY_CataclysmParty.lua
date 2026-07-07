@@ -525,27 +525,9 @@ function MY_CataclysmParty_Base.OnItemRButtonClick()
 		local t = {}
 		InsertTargetMenu(t, dwID)
 		for _, v in ipairs(t) do
-			if v.szOption == g_tStrings.LOOKUP_INFO or v.szOption == g_tStrings.STR_LOOKUP_MORE then
-				for _, vv in ipairs(v) do
-					if vv.szOption == g_tStrings.LOOKUP_NEW_TANLENT then -- ÆæÑ¨
-						table.insert(menu, vv)
-						break
-					end
-				end
-			end
-			if v.szOption == g_tStrings.STR_MAKE_TRADDING then -- ½»Ò×
+			if v.szOption == g_tStrings.STR_MAKE_TRADDING then
 				table.insert(menu, v)
 			end
-		end
-		table.insert(menu, { szOption = g_tStrings.STR_LOOKUP, bDisable = not info.bOnline, fnAction = function()
-			X.ViewOtherPlayerByID(dwID)
-		end })
-		if MY_CharInfo and MY_CharInfo.ViewCharInfoToPlayer then
-			table.insert(menu, {
-				szOption = g_tStrings.STR_LOOK .. g_tStrings.STR_EQUIP_ATTR, bDisable = not info.bOnline, fnAction = function()
-					MY_CharInfo.ViewCharInfoToPlayer(dwID)
-				end
-			})
 		end
 		local extra = {}
 		if MY_Focus then
