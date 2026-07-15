@@ -2162,7 +2162,7 @@ function CTM:DrawHPMP(h, dwID, info, bRefresh)
 		-- if info.dwActualKungfuID == 0 then -- 没有同步成功时显示的内容
 			-- life:SetText('sync ...')
 		-- end
-		h:Lookup('Text_Death'):SetVisible(bDeathFlag)
+		h:Lookup('Text_Death'):SetVisible(bDeathFlag and info.bOnline)
 		h:Lookup('Text_OffLine'):SetVisible(not info.bOnline)
 		h:Lookup('Text_Death'):SetFontScale(CFG.fLifeFontScale)
 		h:Lookup('Text_OffLine'):SetFontScale(CFG.fLifeFontScale)
