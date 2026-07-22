@@ -1,8 +1,8 @@
 --------------------------------------------------------------------------------
 -- This file is part of the JX3 Mingyi Plugin.
 -- @link     : https://jx3.zhaiyiming.com/
--- @desc     : RSS Êý¾Ý¶©ÔÄ
--- @author   : ÜøÒÁ @Ë«ÃÎÕò @×··çõæÓ°
+-- @desc     : RSS ï¿½ï¿½ï¿½Ý¶ï¿½ï¿½ï¿½
+-- @author   : ï¿½ï¿½ï¿½ï¿½ @Ë«ï¿½ï¿½ï¿½ï¿½ @×·ï¿½ï¿½ï¿½ï¿½Ó°
 -- @modifier : Emil Zhai (root@zhaiyiming.com)
 -- @copyright: Emil Zhai <root@zhaiyiming.com>
 --------------------------------------------------------------------------------
@@ -26,8 +26,8 @@ local RSS_DATA = X.LoadLUAData(RSS_FILE) or {}
 local RSS_ADAPTER = {}
 local RSS_DATA_CACHE = {}
 local RSS_BASE_URL      = 'https://rss.j3cx.com'
-local RSS_PULL_BASE_URL = 'https://pull.j3cx.com'
-local RSS_PUSH_BASE_URL = 'https://push.j3cx.com'
+local RSS_PULL_BASE_URL = 'https://pull-gplugin.jx3box.com'
+local RSS_PUSH_BASE_URL = 'https://push-gplugin.jx3box.com'
 local RSS_PAGE_BASE_URL = 'https://page.j3cx.com'
 
 function D.Get(szKey)
@@ -124,7 +124,7 @@ X.RegisterInit('MY_RSS', function()
 end)
 
 --------------------------------------------------------------------------------
--- È«¾Öµ¼³ö
+-- È«ï¿½Öµï¿½ï¿½ï¿½
 --------------------------------------------------------------------------------
 do
 local settings = {
